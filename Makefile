@@ -30,6 +30,16 @@ OPT = -Og
 #######################################
 # Build path
 BUILD_DIR = build
+EXTENSIONS_DIR = $(shell pwd)
+TOPFOLDER = $(EXTENSIONS_DIR)
+
+#UROS_APP_FOLDER = $(shell pwd)/../apps/ping_pong
+
+######################################
+# code format
+######################################
+#FORMAT_RESULT:=$(shell ../../Utilities/tools/astyle-format.sh)
+FORMAT_RESULT:=$(shell clang-format-all Core/Inc Core/Src)
 
 ######################################
 # source
@@ -124,31 +134,58 @@ C_INCLUDES =  \
 # compile gcc flags
 ASFLAGS = $(MCU) $(AS_DEFS) $(AS_INCLUDES) $(OPT) -Wall -fdata-sections -ffunction-sections
 
-CFLAGS += $(MCU) $(C_DEFS) $(C_INCLUDES) $(OPT) -Wall -fdata-sections -ffunction-sections
+CFLAGS = $(MCU) $(C_DEFS) $(C_INCLUDES) $(OPT) -Wall -fdata-sections -ffunction-sections
 
 ifeq ($(DEBUG), 1)
-CFLAGS += -g -gdwarf-2
+CFLAGS += -g -gdwarf-2 -Wall
 endif
 
 
-# Generate dependency information
-CFLAGS += -MMD -MP -MF"$(@:%.o=%.d)"
+CI_BUILD_NUM=0
+#获取commit_id的前8个字符
+COMMIT_ID=$(shell git rev-parse --short=8 HEAD)
+#获取编译时间
+BUILD_TIME=$(shell date +%Y-%m-%d_%H:%M:%S)
+#获取当前分支名
+CURRENT_BRANCH=$(shell git rev-parse --abbrev-ref HEAD)
+#设置软件版本号
+SOFTWARE_VERSION=0.0.1
+#设置型号
+#MODEL_NAME=SECURITY_CHASSIS
 
+#增加SEGGER-RTT输入输出的缓存
+CFLAGS += -DBUFFER_SIZE_UP=2048 -DBUFFER_SIZE_DOWN=32
+
+# Generate dependency information
+CFLAGS += -MMD -MP -MF"$(@:%.o=%.d)" -DCOMMIT_ID=\"$(COMMIT_ID)\" -DBUILD_TIME=\"$(BUILD_TIME)\" -DCURRENT_BRANCH=\"$(CURRENT_BRANCH)\" 
+CFLAGS += -DTARGET=\"$(TARGET)\" -DSOFTWARE_VERSION=\"$(SOFTWARE_VERSION).$(CI_BUILD_NUM)\" -DMODEL_NAME=\"$(MODEL_NAME)\"
+CFLAGS += -Wno-unused-function -Wno-unused-but-set-variable -Wno-unused-variable -Wno-unused-result
+
+# Microros multithread support platform
+CFLAGS += -DPLATFORM_NAME_FREERTOS
 
 #######################################
 # LDFLAGS
 #######################################
 # link script
-LDSCRIPT = STM32F103VGTx_FLASH.ld
+ifdef IAP
+CFLAGS += -DIAP
+LDSCRIPT = $(EXTENSIONS_DIR)/STM32F103VGTx_FLASH_IAP.ld
+else
+LDSCRIPT = $(EXTENSIONS_DIR)/STM32F103VGTx_FLASH.ld
+endif
 
 # libraries
 LIBS = -lc -lm -lnosys 
 LIBDIR = 
 LDFLAGS = $(MCU) -specs=nano.specs -T$(LDSCRIPT) $(LIBDIR) $(LIBS) -Wl,-Map=$(BUILD_DIR)/$(TARGET).map,--cref -Wl,--gc-sections
 
+# printf float
+LDFLAGS += -lc -lrdimon -u _printf_float
+
 # default action: build all
 all: $(BUILD_DIR)/$(TARGET).elf $(BUILD_DIR)/$(TARGET).hex $(BUILD_DIR)/$(TARGET).bin
-
+	cp $(BUILD_DIR)/$(TARGET).elf $(EXTENSIONS_DIR)/${TARGET}.elf
 
 #######################################
 # build the application
@@ -160,15 +197,24 @@ vpath %.c $(sort $(dir $(C_SOURCES)))
 OBJECTS += $(addprefix $(BUILD_DIR)/,$(notdir $(ASM_SOURCES:.s=.o)))
 vpath %.s $(sort $(dir $(ASM_SOURCES)))
 
+ ifneq ($(V),1)
+ Q       := @
+ NULL    := 2>/dev/null
+ endif
+
 $(BUILD_DIR)/%.o: %.c Makefile | $(BUILD_DIR) 
-	$(CC) -c $(CFLAGS) -Wa,-a,-ad,-alms=$(BUILD_DIR)/$(notdir $(<:.c=.lst)) $< -o $@
+	@printf "  CC      $(*).c\n"
+	$(Q) $(CC) -c $(CFLAGS) -Wa,-a,-ad,-alms=$(BUILD_DIR)/$(notdir $(<:.c=.lst)) $< -o $@
 
 $(BUILD_DIR)/%.o: %.s Makefile | $(BUILD_DIR)
-	$(AS) -c $(CFLAGS) $< -o $@
+	@printf "  AS      $(*).c\n"
+	$(Q) $(AS) -c $(CFLAGS) $< -o $@
 
 $(BUILD_DIR)/$(TARGET).elf: $(OBJECTS) Makefile
-	$(CC) $(OBJECTS) $(LDFLAGS) -o $@
-	$(SZ) $@
+	@printf "  LD      $(TARGET).elf\n"
+	$(Q) $(CC) $(OBJECTS) $(LDFLAGS) -o $@
+	@printf "  SZ      $(TARGET).elf\n"
+	$(Q) $(SZ) $@
 
 $(BUILD_DIR)/%.hex: $(BUILD_DIR)/%.elf | $(BUILD_DIR)
 	$(HEX) $< $@
@@ -189,5 +235,47 @@ clean:
 # dependencies
 #######################################
 -include $(wildcard $(BUILD_DIR)/*.d)
+
+OPENOCD := openocd -f interface/jlink.cfg \
+        -c 'transport select swd' \
+        -f target/stm32f1x.cfg
+# download your program
+flash: all
+	$(OPENOCD) -c init \
+		-c 'reset halt' \
+		-c 'flash write_image erase $(BUILD_DIR)/$(TARGET).elf' \
+		-c 'reset run' \
+		-c exit
+
+images:all
+	rm -rf $(BUILD_DIR)/*.o
+	rm -rf $(BUILD_DIR)/*.d
+	rm -rf $(BUILD_DIR)/*.lst
+	rm -rf $(BUILD_DIR)/*.map       
+	rm -rf $(BUILD_DIR)/${TARGET}_*
+	cp $(BUILD_DIR)/$(TARGET).bin $(BUILD_DIR)/${TARGET}_${SOFTWARE_VERSION}.${CI_BUILD_NUM}_${CURRENT_BRANCH}_${COMMIT_ID}.bin
+	rm -rf $(BUILD_DIR)/$(TARGET).elf
+	rm -rf $(BUILD_DIR)/$(TARGET).hex
+	rm -rf $(BUILD_DIR)/$(TARGET).bin
+
+iap:
+	cd c3_workstation_bootloader/hal/ && make iap -j32
+	touch Makefile
+	make images -j32 IAP=1
+	python3 no_compress_ota_packager_python.py
+	rm -rf $(BUILD_DIR)/${TARGET}_*
+	cp ${TARGET}.elf $(BUILD_DIR)/${TARGET}_${SOFTWARE_VERSION}.${CI_BUILD_NUM}.${CURRENT_BRANCH}.${COMMIT_ID}.elf
+	mv $(BUILD_DIR)/ota_${TARGET}_${SOFTWARE_VERSION}.${CI_BUILD_NUM}_${CURRENT_BRANCH}_${COMMIT_ID}.bin $(BUILD_DIR)/${TARGET}_${SOFTWARE_VERSION}.${CI_BUILD_NUM}.${CURRENT_BRANCH}.${COMMIT_ID}.bin
+	mv $(BUILD_DIR)/ota_${TARGET}_${SOFTWARE_VERSION}.${CI_BUILD_NUM}_${CURRENT_BRANCH}_${COMMIT_ID}.rbl $(BUILD_DIR)/${TARGET}_${SOFTWARE_VERSION}.${CI_BUILD_NUM}.${CURRENT_BRANCH}.${COMMIT_ID}.rbl
+	cp $(BUILD_DIR)/${TARGET}_${SOFTWARE_VERSION}.${CI_BUILD_NUM}.${CURRENT_BRANCH}.${COMMIT_ID}.bin $(BUILD_DIR)/${TARGET}_lastest.${CURRENT_BRANCH}.bin
+	cp $(BUILD_DIR)/${TARGET}_${SOFTWARE_VERSION}.${CI_BUILD_NUM}.${CURRENT_BRANCH}.${COMMIT_ID}.rbl $(BUILD_DIR)/${TARGET}_lastest.${CURRENT_BRANCH}.rbl
+download:
+	rm -rf flash.jlink
+	touch flash.jlink
+	echo "r" > flash.jlink
+	echo "loadfile build/${TARGET}_${SOFTWARE_VERSION}.${CI_BUILD_NUM}.${CURRENT_BRANCH}.${COMMIT_ID}.bin" >> flash.jlink
+	echo "r" >> flash.jlink
+	echo "exit" >> flash.jlink
+	JLinkExe -device STM32F103VG  -si SWD -speed 4000 -CommanderScript ./flash.jlink
 
 # *** EOF ***
