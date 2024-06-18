@@ -56,7 +56,7 @@ void MX_GPIO_Init(void) {
     GPIO_InitStruct.Pin   = ANALOG_PWM_Pin;
     GPIO_InitStruct.Mode  = GPIO_MODE_OUTPUT_PP;
     GPIO_InitStruct.Pull  = GPIO_NOPULL;
-    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_MEDIUM;
     HAL_GPIO_Init(ANALOG_PWM_GPIO_Port, &GPIO_InitStruct);
 
     /*Configure GPIO pin : PtPin */

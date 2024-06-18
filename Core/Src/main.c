@@ -37,9 +37,11 @@
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
 // Timer Interrupt 1us/tick
-#define CYCLE_TICKS_30HZ               33333  // unit: us
-#define ANALOG_PWM_HIGH_LEVEL_TICKS    100    // uint: us
-#define ANALOG_PWM_GET_ADC_VALUE_TICKS 50     // uint: us
+// 20us
+#define CYCLE_TICKS_20HZ               2000  // unit: 20us
+#define ANALOG_PWM_HIGH_LEVEL_TICKS    5     // uint: 20us
+#define ANALOG_PWM_GET_ADC_VALUE_TICKS 3     // uint: 20us
+#define ADC_DETECT_VALUE               1024
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -81,23 +83,30 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
 // }
 void AnalogPwm_Output(void) {
     if (tickCounts == 0) {
-        printf("Analog pwm start");
+        // printf("Analog pwm start");
         HAL_GPIO_WritePin(ANALOG_PWM_GPIO_Port, ANALOG_PWM_Pin, GPIO_PIN_SET);
     }
 
     tickCounts++;
-
-    if (tickCounts >= CYCLE_TICKS_30HZ) {
+    if (tickCounts >= CYCLE_TICKS_20HZ) {
         tickCounts = 0;
         return;
-    } else if ((tickCounts == ANALOG_PWM_HIGH_LEVEL_TICKS) && (tickCounts < CYCLE_TICKS_30HZ)) {
+    } else if ((tickCounts == ANALOG_PWM_HIGH_LEVEL_TICKS) && (tickCounts < CYCLE_TICKS_20HZ)) {
         HAL_GPIO_WritePin(ANALOG_PWM_GPIO_Port, ANALOG_PWM_Pin, GPIO_PIN_RESET);
     }
 
-    if ((tickCounts == ANALOG_PWM_GET_ADC_VALUE_TICKS) && (adc_value < 2048)) {
+    if ((tickCounts == ANALOG_PWM_GET_ADC_VALUE_TICKS) && (adc_value < ADC_DETECT_VALUE)) {
         HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
         // HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, GPIO_PIN_SET);
     }
+
+    // test
+    // static uint8_t state = 0;
+    // if (state == 0)
+    //     HAL_GPIO_WritePin(ANALOG_PWM_GPIO_Port, ANALOG_PWM_Pin, GPIO_PIN_SET);
+    // else
+    //     HAL_GPIO_WritePin(ANALOG_PWM_GPIO_Port, ANALOG_PWM_Pin, GPIO_PIN_RESET);
+    // state = !state;
 }
 /* USER CODE END 0 */
 
@@ -129,8 +138,8 @@ int main(void) {
     /* Initialize all configured peripherals */
     MX_GPIO_Init();
     MX_ADC1_Init();
-    MX_TIM3_Init();
     MX_USART1_UART_Init();
+    MX_TIM3_Init();
     /* USER CODE BEGIN 2 */
     GPIO_Default_Init();
     /*使能定时器3中断*/
@@ -141,7 +150,7 @@ int main(void) {
     /* USER CODE BEGIN WHILE */
     while (1) {
         adc_value = adc_read();
-        // printf("adc_value:%d\r\n", adc_value);
+        printf("adc_value:%d\r\n", adc_value);
         /* USER CODE END WHILE */
 
         /* USER CODE BEGIN 3 */
@@ -199,7 +208,7 @@ void GPIO_Default_Init(void) {
 uint16_t adc_read(void) {
     uint16_t adc_value = 0;
     HAL_ADC_Start(&hadc1);
-    if (HAL_ADC_PollForConversion(&hadc1, HAL_MAX_DELAY) == HAL_OK) {
+    if (HAL_ADC_PollForConversion(&hadc1, 1) == HAL_OK) {
         // get adc value
         adc_value = HAL_ADC_GetValue(&hadc1);
         HAL_ADC_Stop(&hadc1);
