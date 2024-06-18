@@ -39,7 +39,7 @@ TOPFOLDER = $(EXTENSIONS_DIR)
 # code format
 ######################################
 #FORMAT_RESULT:=$(shell ../../Utilities/tools/astyle-format.sh)
-FORMAT_RESULT:=$(shell clang-format-all Core/Inc Core/Src)
+FORMAT_RESULT:=$(shell ./clang-format-all Core/Inc Core/Src)
 
 ######################################
 # source
