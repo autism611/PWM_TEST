@@ -22,6 +22,7 @@
 #include "stm32f1xx_it.h"
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include "stdint.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -31,27 +32,47 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-
+// Timer Interrupt 1us/tick
+#define CYCLE_TICKS_30HZ               33333  // unit: us
+#define ANALOG_PWM_HIGH_LEVEL_TICKS    100    // uint: us
+#define ANALOG_PWM_GET_ADC_VALUE_TICKS 50     // uint: us
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
 /* USER CODE BEGIN PM */
-
+extern uint16_t adc_value;
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
 /* USER CODE BEGIN PV */
-
+static int tickCounts = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 /* USER CODE BEGIN PFP */
-
+void AnalogPwm_Output(void);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+void AnalogPwm_Output(void) {
+    if (tickCounts == 0) {
+        HAL_GPIO_WritePin(ANALOG_PWM_GPIO_Port, ANALOG_PWM_Pin, GPIO_PIN_SET);
+    }
 
+    tickCounts++;
+
+    if (tickCounts >= CYCLE_TICKS_30HZ) {
+        tickCounts = 0;
+        return;
+    } else if ((tickCounts == ANALOG_PWM_HIGH_LEVEL_TICKS) && (tickCounts < CYCLE_TICKS_30HZ)) {
+        HAL_GPIO_WritePin(ANALOG_PWM_GPIO_Port, ANALOG_PWM_Pin, GPIO_PIN_RESET);
+    }
+
+    if ((tickCounts == ANALOG_PWM_GET_ADC_VALUE_TICKS) && (adc_value < 2048)) {
+        HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
+    }
+}
 /* USER CODE END 0 */
 
 /* External variables --------------------------------------------------------*/
@@ -189,7 +210,7 @@ void SysTick_Handler(void) {
  */
 void TIM3_IRQHandler(void) {
     /* USER CODE BEGIN TIM3_IRQn 0 */
-
+    AnalogPwm_Output();
     /* USER CODE END TIM3_IRQn 0 */
     HAL_TIM_IRQHandler(&htim3);
     /* USER CODE BEGIN TIM3_IRQn 1 */

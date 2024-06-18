@@ -24,7 +24,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include "stdint.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -45,13 +45,14 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
-
+uint16_t adc_value = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 /* USER CODE BEGIN PFP */
-
+void     GPIO_Default_Init(void);
+uint16_t adc_read(void);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -89,14 +90,16 @@ int main(void) {
     MX_ADC1_Init();
     MX_TIM3_Init();
     /* USER CODE BEGIN 2 */
-
+    GPIO_Default_Init();
+    // HAL_ADCEx_Calibration_Start(&hadc1);  // ADC校准
     /* USER CODE END 2 */
 
     /* Infinite loop */
     /* USER CODE BEGIN WHILE */
     while (1) {
         /* USER CODE END WHILE */
-
+        adc_value = adc_read();
+        // adc_value = 1000;
         /* USER CODE BEGIN 3 */
     }
     /* USER CODE END 3 */
@@ -144,7 +147,21 @@ void SystemClock_Config(void) {
 }
 
 /* USER CODE BEGIN 4 */
+void GPIO_Default_Init(void) {
+    HAL_GPIO_WritePin(ANALOG_PWM_GPIO_Port, ANALOG_PWM_Pin, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, GPIO_PIN_SET);
+}
 
+uint16_t adc_read(void) {
+    uint16_t adc_value = 0;
+    HAL_ADC_Start(&hadc1);
+    if (HAL_ADC_PollForConversion(&hadc1, HAL_MAX_DELAY) == HAL_OK) {
+        // get adc value
+        adc_value = HAL_ADC_GetValue(&hadc1);
+        HAL_ADC_Stop(&hadc1);
+    }
+    return adc_value;
+}
 /* USER CODE END 4 */
 
 /**
