@@ -20,6 +20,7 @@
 #include "main.h"
 #include "adc.h"
 #include "tim.h"
+#include "usart.h"
 #include "gpio.h"
 
 /* Private includes ----------------------------------------------------------*/
@@ -89,6 +90,7 @@ int main(void) {
     MX_GPIO_Init();
     MX_ADC1_Init();
     MX_TIM3_Init();
+    MX_USART1_UART_Init();
     /* USER CODE BEGIN 2 */
     GPIO_Default_Init();
     // HAL_ADCEx_Calibration_Start(&hadc1);  // ADC校准
@@ -98,8 +100,7 @@ int main(void) {
     /* USER CODE BEGIN WHILE */
     while (1) {
         /* USER CODE END WHILE */
-        adc_value = adc_read();
-        // adc_value = 1000;
+
         /* USER CODE BEGIN 3 */
     }
     /* USER CODE END 3 */
