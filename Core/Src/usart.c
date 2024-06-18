@@ -21,6 +21,13 @@
 #include "usart.h"
 
 /* USER CODE BEGIN 0 */
+#include "stdio.h"
+#include "stdint.h"
+
+int _write(int fd, char *ch, int len) {
+    HAL_UART_Transmit(&huart1, (uint8_t *) ch, len, 0xFFFF);
+    return len;
+}
 
 /* USER CODE END 0 */
 

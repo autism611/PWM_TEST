@@ -26,6 +26,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "stdint.h"
+#include "stdio.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -35,7 +36,10 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-
+// Timer Interrupt 1us/tick
+#define CYCLE_TICKS_30HZ               33333  // unit: us
+#define ANALOG_PWM_HIGH_LEVEL_TICKS    100    // uint: us
+#define ANALOG_PWM_GET_ADC_VALUE_TICKS 50     // uint: us
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -46,19 +50,55 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
-uint16_t adc_value = 0;
+uint16_t   adc_value  = 0;
+static int tickCounts = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 /* USER CODE BEGIN PFP */
 void     GPIO_Default_Init(void);
+void     AnalogPwm_Output(void);
 uint16_t adc_read(void);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
+    if (htim == (&htim3)) {
+        AnalogPwm_Output();
+    }
+}
+// void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
+//     static unsigned char ledState = 0;
+//     if (htim == (&htim3)) {
+//         if (ledState == 0)
+//             HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, GPIO_PIN_RESET);
+//         else
+//             HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, GPIO_PIN_SET);
+//         ledState = !ledState;
+//     }
+// }
+void AnalogPwm_Output(void) {
+    if (tickCounts == 0) {
+        printf("Analog pwm start");
+        HAL_GPIO_WritePin(ANALOG_PWM_GPIO_Port, ANALOG_PWM_Pin, GPIO_PIN_SET);
+    }
 
+    tickCounts++;
+
+    if (tickCounts >= CYCLE_TICKS_30HZ) {
+        tickCounts = 0;
+        return;
+    } else if ((tickCounts == ANALOG_PWM_HIGH_LEVEL_TICKS) && (tickCounts < CYCLE_TICKS_30HZ)) {
+        HAL_GPIO_WritePin(ANALOG_PWM_GPIO_Port, ANALOG_PWM_Pin, GPIO_PIN_RESET);
+    }
+
+    if ((tickCounts == ANALOG_PWM_GET_ADC_VALUE_TICKS) && (adc_value < 2048)) {
+        HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
+        // HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, GPIO_PIN_SET);
+    }
+}
 /* USER CODE END 0 */
 
 /**
@@ -93,12 +133,15 @@ int main(void) {
     MX_USART1_UART_Init();
     /* USER CODE BEGIN 2 */
     GPIO_Default_Init();
-    // HAL_ADCEx_Calibration_Start(&hadc1);  // ADC校准
+    /*使能定时器3中断*/
+    HAL_TIM_Base_Start_IT(&htim3);
     /* USER CODE END 2 */
 
     /* Infinite loop */
     /* USER CODE BEGIN WHILE */
     while (1) {
+        adc_value = adc_read();
+        // printf("adc_value:%d\r\n", adc_value);
         /* USER CODE END WHILE */
 
         /* USER CODE BEGIN 3 */
@@ -150,7 +193,7 @@ void SystemClock_Config(void) {
 /* USER CODE BEGIN 4 */
 void GPIO_Default_Init(void) {
     HAL_GPIO_WritePin(ANALOG_PWM_GPIO_Port, ANALOG_PWM_Pin, GPIO_PIN_RESET);
-    HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, GPIO_PIN_RESET);
 }
 
 uint16_t adc_read(void) {
